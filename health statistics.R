@@ -3,33 +3,49 @@ library(shinydashboard)
 library(tidyverse)
 library(plotly)
 
-
+# --- STEP 1: DATA INGESTION ---
+# Ensure your data.csv is in the same folder
 big_data <- read.csv("data.csv", stringsAsFactors = TRUE)
 
 # --- STEP 2: THE UI ---
 ui <- dashboardPage(
   skin = "purple",
-  dashboardHeader(title = "Pulse-Point AI"),
+  dashboardHeader(title = "VitalMetrics"),
+  
   dashboardSidebar(
     sidebarMenu(
-      menuItem("National Overview", tabName = "overview", icon = icon("globe")),
-      menuItem("Risk Analysis", tabName = "risk", icon = icon("heartbeat")),
-      # This slider now filters based on the real Age column in your CSV
-      sliderInput("age_filter", "Filter by Age:", 
-                  min(big_data$Age), max(big_data$Age), 
+      # Rebranded from National Overview to Global Insights
+      menuItem("Global Insights", tabName = "overview", icon = icon("globe")),
+      menuItem("Risk Analysis", tabName = "heartbeat", icon = icon("heartbeat")),
+      
+      # Dynamic Age Filter
+      sliderInput("age_filter", "Filter by Age Range:", 
+                  min = min(big_data$Age), 
+                  max = max(big_data$Age), 
                   value = c(min(big_data$Age), max(big_data$Age)))
     )
   ),
+  
   dashboardBody(
     tabItems(
+      # Tab 1: Global Insights
       tabItem(tabName = "overview",
               fluidRow(
-                valueBox(nrow(big_data), "Records Loaded", icon = icon("database"), color = "aqua"),
-                valueBox(round(mean(big_data$Risk_Score),1), "Avg Risk Score", icon = icon("heart"), color = "red"),
-                valueBox("Local CSV", "Data Source", icon = icon("file-csv"), color = "green")
+                valueBox(nrow(big_data), "Total Records", icon = icon("database"), color = "aqua"),
+                valueBox(round(mean(big_data$Risk_Score), 1), "Avg Risk Score", icon = icon("heart"), color = "red"),
+                valueBox("Active", "System Status", icon = icon("check-circle"), color = "green")
               ),
               fluidRow(
-                box(title = "Risk vs. Age (Data from CSV)", width = 12, plotlyOutput("trendPlot"))
+                box(title = "Global Risk Trends by Age", width = 12, status = "primary",
+                    plotlyOutput("trendPlot"))
+              )
+      ),
+      
+      # Tab 2: Risk Analysis
+      tabItem(tabName = "heartbeat",
+              fluidRow(
+                box(title = "Distribution Analysis", width = 12, status = "danger",
+                    plotlyOutput("distPlot"))
               )
       )
     )
@@ -38,18 +54,33 @@ ui <- dashboardPage(
 
 # --- STEP 3: THE SERVER ---
 server <- function(input, output) {
-  output$trendPlot <- renderPlotly({
-    # Filter the data loaded from your local file
-    filtered <- big_data %>%
+  
+  # Reactive Data Filtering
+  filtered_data <- reactive({
+    big_data %>%
       filter(Age >= input$age_filter[1] & Age <= input$age_filter[2])
-    
-    # Create the plot using columns from your CSV (Age and Risk_Score)
-    p <- ggplot(filtered, aes(x = Age, y = Risk_Score, color = Department)) +
+  })
+  
+  # Trend Plot for Global Insights
+  output$trendPlot <- renderPlotly({
+    p <- ggplot(filtered_data(), aes(x = Age, y = Risk_Score, color = Department)) +
       geom_point(alpha = 0.5) +
-      geom_smooth(method = "lm", color = "black") + 
-      theme_minimal()
+      geom_smooth(method = "lm", color = "black", se = FALSE) + 
+      theme_minimal() +
+      labs(y = "Calculated Risk Score", x = "Patient Age")
     
-    ggplotly(p)
+    # ggplotly conversion with logo removal
+    ggplotly(p) %>% config(displaylogo = FALSE)
+  })
+  
+  # Distribution Plot for Risk Analysis
+  output$distPlot <- renderPlotly({
+    p <- ggplot(filtered_data(), aes(x = Department, y = Risk_Score, fill = Department)) +
+      geom_boxplot() +
+      theme_minimal() +
+      labs(title = "Risk Distribution by Department")
+    
+    ggplotly(p) %>% config(displaylogo = FALSE)
   })
 }
 
